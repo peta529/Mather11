@@ -260,7 +260,11 @@ function renderSeasonGate(){
     <div style="max-width:640px;margin:70px auto 0;text-align:center;">
       <h1 class="shop-name">${escapeHtml(settings.name)}</h1>
       ${settings.tagline ? `<p class="shop-tagline" style="margin-bottom:30px;">${escapeHtml(settings.tagline)}</p>` : ''}
-      <p style="color:var(--muted);font-size:14px;margin:30px 0 14px;">Оберіть сезон, щоб побачити відповідне взуття</p>
+      <div style="display:flex;gap:8px;max-width:420px;margin:30px auto 0;">
+        <input type="text" class="search-input" id="gate-search" placeholder="Або одразу пошук: назва чи опис…">
+        <button class="btn primary" id="gate-search-btn">Шукати</button>
+      </div>
+      <p style="color:var(--muted);font-size:14px;margin:26px 0 14px;">Або оберіть сезон</p>
       <div class="season-grid">
         ${SEASONS.map(s => `<button class="season-tile" data-season="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join('')}
         <button class="season-tile" data-season="Всі">Весь каталог</button>
@@ -268,6 +272,16 @@ function renderSeasonGate(){
     </div>
   `;
   document.querySelectorAll('[data-season]').forEach(el => el.onclick = () => { filterSeason = el.dataset.season; render(); });
+  const gateSearch = document.getElementById('gate-search');
+  const runGateSearch = () => {
+    const q = gateSearch.value.trim();
+    if(!q) return;
+    searchQ = q;
+    filterSeason = 'Всі';
+    render();
+  };
+  document.getElementById('gate-search-btn').onclick = runGateSearch;
+  gateSearch.onkeydown = e => { if(e.key === 'Enter') runGateSearch(); };
   bindSocialLinks();
   bindAdminHeaderControls();
 }
