@@ -9,13 +9,20 @@ let pendingPhotos = [];
 
 const app = document.getElementById('app');
 
+const ICON_TG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M21 4L2.5 11.5l6 2 2 6.5 3-4 4.5 3.5L21 4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+const ICON_VIBER = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 4h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-6l-4 4v-4H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+const ICON_IG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="17" height="17" rx="5" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.6"/><circle cx="17.2" cy="6.8" r="1.1" fill="currentColor"/></svg>';
+
 function escapeHtml(s){
   return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
-function contactHref(contact){
-  if(!contact) return null;
-  if(/^\+?\d[\d\s\-]{6,}$/.test(contact)) return 'tel:' + contact.replace(/[^\d+]/g,'');
-  return contact;
+function renderSocialLinks(){
+  if(!settings) return '';
+  const items = [];
+  if(settings.telegram) items.push(`<a class="btn small icon" href="${escapeHtml(settings.telegram)}" target="_blank" rel="noopener" title="Telegram">${ICON_TG}</a>`);
+  if(settings.viber) items.push(`<a class="btn small icon" href="${escapeHtml(settings.viber)}" target="_blank" rel="noopener" title="Viber">${ICON_VIBER}</a>`);
+  if(settings.instagram) items.push(`<a class="btn small icon" href="${escapeHtml(settings.instagram)}" target="_blank" rel="noopener" title="Instagram">${ICON_IG}</a>`);
+  return items.join('');
 }
 async function api(url, opts){
   try{
@@ -93,8 +100,16 @@ function renderSettingsSetup(){
         <input type="text" id="s-tag" placeholder="Наприклад: вживане і нове взуття в хорошому стані">
       </div>
       <div class="field">
-        <label for="s-contact">Посилання для зв'язку (необов'язково)</label>
-        <input type="url" id="s-contact" placeholder="https://wa.me/380... або https://t.me/imya">
+        <label for="s-telegram">Посилання на Telegram (необов'язково)</label>
+        <input type="url" id="s-telegram" placeholder="https://t.me/imya">
+      </div>
+      <div class="field">
+        <label for="s-viber">Посилання на Viber (необов'язково)</label>
+        <input type="url" id="s-viber" placeholder="viber://chat?number=%2B380...">
+      </div>
+      <div class="field">
+        <label for="s-instagram">Посилання на Instagram (необов'язково)</label>
+        <input type="url" id="s-instagram" placeholder="https://instagram.com/imya">
       </div>
       <div class="err" id="s-err"></div>
       <div class="modal-actions" style="justify-content:flex-start;">
@@ -108,7 +123,9 @@ function renderSettingsSetup(){
     settings = {
       name,
       tagline: document.getElementById('s-tag').value.trim(),
-      contact: document.getElementById('s-contact').value.trim()
+      telegram: document.getElementById('s-telegram').value.trim(),
+      viber: document.getElementById('s-viber').value.trim(),
+      instagram: document.getElementById('s-instagram').value.trim()
     };
     products = [];
     const ok = await saveData();
@@ -146,7 +163,6 @@ function render(){
 
   const categories = ['Всі','Жіноче','Чоловіче','Дитяче','Унісекс'];
   const filtered = getFilteredProducts();
-  const contact = contactHref(settings.contact);
 
   app.innerHTML = `
     <header class="shop-head">
@@ -155,7 +171,7 @@ function render(){
         ${settings.tagline ? `<p class="shop-tagline">${escapeHtml(settings.tagline)}</p>` : ''}
       </div>
       <div class="head-actions">
-        ${contact ? `<a class="btn" href="${escapeHtml(contact)}" target="_blank" rel="noopener">Написати</a>` : ''}
+        ${renderSocialLinks()}
         ${adminHeaderControls()}
       </div>
     </header>
@@ -179,6 +195,7 @@ function render(){
   document.getElementById('show-sold').onchange = e => { showSold = e.target.checked; render(); };
   document.querySelectorAll('[data-nav]').forEach(el => el.onclick = () => cycleCardPhoto(el.dataset.nav, parseInt(el.dataset.dir,10)));
   document.querySelectorAll('[data-zoom]').forEach(el => el.onclick = () => openLightbox(el.dataset.zoom));
+  document.querySelectorAll('[data-readmore]').forEach(el => el.onclick = () => openReadMoreModal(el.dataset.readmore));
   if(isAdmin){
     document.querySelectorAll('[data-edit]').forEach(el => el.onclick = () => openProductModal(el.dataset.edit));
     document.querySelectorAll('[data-delete]').forEach(el => el.onclick = () => confirmDelete(el.dataset.delete));
@@ -221,7 +238,7 @@ function cardHtml(p){
       ${p.status === 'sold' ? `<div class="stamp">продано</div>` : ''}
       <div class="photo-box">${photoInner}${nav}</div>
       <h3 class="card-title">${escapeHtml(p.title)}</h3>
-      ${p.description ? `<p class="card-desc">${escapeHtml(p.description)}</p>` : ''}
+      ${p.description ? `<p class="card-desc" data-readmore="${p.id}">${escapeHtml(p.description)}</p>` : ''}
       <div class="card-meta">
         <span class="card-price mono">${escapeHtml(p.price || '—')}</span>
         ${p.sizes ? `<span class="card-size">р. ${escapeHtml(p.sizes)}</span>` : ''}
@@ -294,6 +311,29 @@ function openLightbox(id){
   document.addEventListener('keydown', onKey);
   document.body.appendChild(bg);
   renderInner();
+}
+
+function openReadMoreModal(id){
+  const p = products.find(x => x.id === id);
+  if(!p) return;
+  const bg = document.createElement('div');
+  bg.className = 'modal-bg';
+  bg.innerHTML = `
+    <div class="modal">
+      <h2>${escapeHtml(p.title)}</h2>
+      <p class="sub" style="white-space:pre-wrap;line-height:1.6;color:var(--ink);">${escapeHtml(p.description)}</p>
+      <div class="card-meta" style="margin:14px 0 4px;">
+        <span class="card-price mono">${escapeHtml(p.price || '—')}</span>
+        ${p.sizes ? `<span class="card-size">р. ${escapeHtml(p.sizes)}</span>` : ''}
+      </div>
+      <div class="modal-actions">
+        <button class="btn primary" id="rm-close">Закрити</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(bg);
+  document.getElementById('rm-close').onclick = () => bg.remove();
+  bg.onclick = e => { if(e.target === bg) bg.remove(); };
 }
 
 /* ---------- DOCK (only add-product button, floating) ---------- */
@@ -375,8 +415,16 @@ function openSettingsModal(){
         <input type="text" id="st-tag" value="${escapeHtml(settings.tagline||'')}">
       </div>
       <div class="field">
-        <label for="st-contact">Посилання для зв'язку</label>
-        <input type="url" id="st-contact" value="${escapeHtml(settings.contact||'')}" placeholder="https://wa.me/380...">
+        <label for="st-telegram">Посилання на Telegram</label>
+        <input type="url" id="st-telegram" value="${escapeHtml(settings.telegram||'')}" placeholder="https://t.me/imya">
+      </div>
+      <div class="field">
+        <label for="st-viber">Посилання на Viber</label>
+        <input type="url" id="st-viber" value="${escapeHtml(settings.viber||'')}" placeholder="viber://chat?number=%2B380...">
+      </div>
+      <div class="field">
+        <label for="st-instagram">Посилання на Instagram</label>
+        <input type="url" id="st-instagram" value="${escapeHtml(settings.instagram||'')}" placeholder="https://instagram.com/imya">
       </div>
       <p class="hint">Щоб змінити пароль входу, відредагуйте його в файлі lib/auth.js у коді сайту.</p>
       <div class="err" id="st-err"></div>
@@ -394,7 +442,9 @@ function openSettingsModal(){
     if(!name){ document.getElementById('st-err').textContent = 'Назва не може бути порожньою.'; return; }
     settings.name = name;
     settings.tagline = document.getElementById('st-tag').value.trim();
-    settings.contact = document.getElementById('st-contact').value.trim();
+    settings.telegram = document.getElementById('st-telegram').value.trim();
+    settings.viber = document.getElementById('st-viber').value.trim();
+    settings.instagram = document.getElementById('st-instagram').value.trim();
     const ok = await saveData();
     if(ok){ bg.remove(); render(); }
   };
