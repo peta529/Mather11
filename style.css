@@ -134,8 +134,16 @@ textarea{resize:vertical;min-height:72px;}
 }
 
 .btn.icon{padding:8px 10px;display:inline-flex;align-items:center;justify-content:center;}
+.btn.icon.icon-empty{opacity:.45;border-style:dashed;}
 .card-desc{cursor:pointer;}
 .card-desc:hover{color:var(--ink);}
+.season-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-top:16px;}
+.season-tile{
+  padding:26px 14px;border:1.5px dashed var(--line-strong);border-radius:8px;
+  background:var(--card);font-family:'Zilla Slab',serif;font-size:17px;font-weight:600;
+  color:var(--ink);box-shadow:2px 3px 0 rgba(38,33,28,.08);transition:background .15s;
+}
+.season-tile:hover{background:var(--paper-2);}
 .login-box{max-width:380px;margin:70px auto;background:var(--card);border:1px solid var(--line-strong);border-radius:8px;padding:28px 26px;}
 
 @media (max-width:480px){
