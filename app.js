@@ -2,27 +2,75 @@ let settings = null;
 let products = [];
 let isAdmin = false;
 let filterCat = 'Всі';
+let filterSeason = null;
 let showSold = true;
 let searchQ = '';
 let cardPhotoIndex = {};
 let pendingPhotos = [];
+const SEASONS = ['Зима','Демісезон','Літо'];
 
 const app = document.getElementById('app');
 
 const ICON_TG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M21 4L2.5 11.5l6 2 2 6.5 3-4 4.5 3.5L21 4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>';
 const ICON_VIBER = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 4h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-6l-4 4v-4H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>';
 const ICON_IG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="17" height="17" rx="5" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.6"/><circle cx="17.2" cy="6.8" r="1.1" fill="currentColor"/></svg>';
+const SOCIAL_META = {
+  telegram: { label:'Telegram', icon:ICON_TG, placeholder:'https://t.me/imya' },
+  viber: { label:'Viber', icon:ICON_VIBER, placeholder:'viber://chat?number=%2B380...' },
+  instagram: { label:'Instagram', icon:ICON_IG, placeholder:'https://instagram.com/imya' }
+};
 
 function escapeHtml(s){
   return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function renderSocialLinks(){
   if(!settings) return '';
-  const items = [];
-  if(settings.telegram) items.push(`<a class="btn small icon" href="${escapeHtml(settings.telegram)}" target="_blank" rel="noopener" title="Telegram">${ICON_TG}</a>`);
-  if(settings.viber) items.push(`<a class="btn small icon" href="${escapeHtml(settings.viber)}" target="_blank" rel="noopener" title="Viber">${ICON_VIBER}</a>`);
-  if(settings.instagram) items.push(`<a class="btn small icon" href="${escapeHtml(settings.instagram)}" target="_blank" rel="noopener" title="Instagram">${ICON_IG}</a>`);
-  return items.join('');
+  const keys = Object.keys(SOCIAL_META);
+  if(isAdmin){
+    return keys.map(k => {
+      const meta = SOCIAL_META[k];
+      const filled = Boolean(settings[k]);
+      return `<button type="button" class="btn small icon${filled ? '' : ' icon-empty'}" data-social-edit="${k}" title="${filled ? meta.label : 'Додати ' + meta.label}">${meta.icon}</button>`;
+    }).join('');
+  }
+  return keys.filter(k => settings[k]).map(k => {
+    const meta = SOCIAL_META[k];
+    return `<a class="btn small icon" href="${escapeHtml(settings[k])}" target="_blank" rel="noopener" title="${meta.label}">${meta.icon}</a>`;
+  }).join('');
+}
+function bindSocialLinks(){
+  document.querySelectorAll('[data-social-edit]').forEach(el => el.onclick = () => openSocialModal(el.dataset.socialEdit));
+}
+function openSocialModal(key){
+  const meta = SOCIAL_META[key];
+  const bg = document.createElement('div');
+  bg.className = 'modal-bg';
+  bg.innerHTML = `
+    <div class="modal" style="max-width:400px;">
+      <h2>${meta.label}</h2>
+      <div class="field">
+        <label for="soc-val">Посилання</label>
+        <input type="url" id="soc-val" value="${escapeHtml(settings[key]||'')}" placeholder="${meta.placeholder}">
+        <div class="hint">Залиште порожнім, щоб прибрати кнопку з сайту.</div>
+      </div>
+      <div class="err" id="soc-err"></div>
+      <div class="modal-actions">
+        <button class="btn ghost" id="soc-cancel">Скасувати</button>
+        <button class="btn primary" id="soc-save">Зберегти</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(bg);
+  const input = document.getElementById('soc-val');
+  input.focus();
+  document.getElementById('soc-cancel').onclick = () => bg.remove();
+  bg.onclick = e => { if(e.target === bg) bg.remove(); };
+  document.getElementById('soc-save').onclick = async () => {
+    settings[key] = input.value.trim();
+    const ok = await saveData();
+    if(ok){ bg.remove(); render(); }
+    else { document.getElementById('soc-err').textContent = 'Не вдалося зберегти.'; }
+  };
 }
 async function api(url, opts){
   try{
@@ -39,6 +87,7 @@ async function boot(){
   const statusRes = await api('/api/auth-status');
   if(statusRes.networkError){ renderLoadError(); return; }
   isAdmin = Boolean(statusRes.body && statusRes.body.admin);
+  if(isAdmin) filterSeason = 'Всі';
 
   const dataRes = await api('/api/data');
   if(dataRes.networkError){ renderLoadError(); return; }
@@ -134,18 +183,6 @@ function renderSettingsSetup(){
 }
 
 /* ---------- MAIN VIEW ---------- */
-function getFilteredProducts(){
-  return products.filter(p => {
-    if(!showSold && p.status === 'sold') return false;
-    if(filterCat !== 'Всі' && p.category !== filterCat) return false;
-    if(searchQ){
-      const hay = (p.title+' '+p.description).toLowerCase();
-      if(!hay.includes(searchQ.toLowerCase())) return false;
-    }
-    return true;
-  });
-}
-
 function render(){
   if(!settings){
     app.innerHTML = `
@@ -154,10 +191,17 @@ function render(){
         <p>Власник ще не заповнив дані. Загляньте трохи пізніше.</p>
       </div>
       <div class="head-actions" style="position:fixed;top:16px;right:16px;">
+        ${renderSocialLinks()}
         ${adminHeaderControls()}
       </div>
     `;
+    bindSocialLinks();
     bindAdminHeaderControls();
+    return;
+  }
+
+  if(!isAdmin && filterSeason === null){
+    renderSeasonGate();
     return;
   }
 
@@ -178,6 +222,7 @@ function render(){
 
     <div class="controls">
       <input type="text" class="search-input" id="search" placeholder="Пошук за назвою або описом" value="${escapeHtml(searchQ)}">
+      <button class="chip" id="change-season">Сезон: ${escapeHtml(filterSeason)} · Змінити</button>
       ${categories.map(c => `<button class="chip${c===filterCat?' active':''}" data-cat="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}
       <label class="toggle-sold"><input type="checkbox" id="show-sold" ${showSold?'checked':''}> Показувати продане</label>
     </div>
@@ -191,7 +236,8 @@ function render(){
   `;
 
   document.getElementById('search').oninput = e => { searchQ = e.target.value; render(); };
-  document.querySelectorAll('.chip').forEach(el => el.onclick = () => { filterCat = el.dataset.cat; render(); });
+  document.getElementById('change-season').onclick = () => { filterSeason = isAdmin ? filterSeason : null; if(isAdmin){ openSeasonSwitchModal(); } else { render(); } };
+  document.querySelectorAll('.chip[data-cat]').forEach(el => el.onclick = () => { filterCat = el.dataset.cat; render(); });
   document.getElementById('show-sold').onchange = e => { showSold = e.target.checked; render(); };
   document.querySelectorAll('[data-nav]').forEach(el => el.onclick = () => cycleCardPhoto(el.dataset.nav, parseInt(el.dataset.dir,10)));
   document.querySelectorAll('[data-zoom]').forEach(el => el.onclick = () => openLightbox(el.dataset.zoom));
@@ -200,8 +246,65 @@ function render(){
     document.querySelectorAll('[data-edit]').forEach(el => el.onclick = () => openProductModal(el.dataset.edit));
     document.querySelectorAll('[data-delete]').forEach(el => el.onclick = () => confirmDelete(el.dataset.delete));
   }
+  bindSocialLinks();
   bindAdminHeaderControls();
   renderDock();
+}
+
+function renderSeasonGate(){
+  app.innerHTML = `
+    <div class="head-actions" style="position:fixed;top:16px;right:16px;z-index:50;">
+      ${renderSocialLinks()}
+      ${adminHeaderControls()}
+    </div>
+    <div style="max-width:640px;margin:70px auto 0;text-align:center;">
+      <h1 class="shop-name">${escapeHtml(settings.name)}</h1>
+      ${settings.tagline ? `<p class="shop-tagline" style="margin-bottom:30px;">${escapeHtml(settings.tagline)}</p>` : ''}
+      <p style="color:var(--muted);font-size:14px;margin:30px 0 14px;">Оберіть сезон, щоб побачити відповідне взуття</p>
+      <div class="season-grid">
+        ${SEASONS.map(s => `<button class="season-tile" data-season="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join('')}
+        <button class="season-tile" data-season="Всі">Весь каталог</button>
+      </div>
+    </div>
+  `;
+  document.querySelectorAll('[data-season]').forEach(el => el.onclick = () => { filterSeason = el.dataset.season; render(); });
+  bindSocialLinks();
+  bindAdminHeaderControls();
+}
+
+function openSeasonSwitchModal(){
+  const bg = document.createElement('div');
+  bg.className = 'modal-bg';
+  bg.innerHTML = `
+    <div class="modal" style="max-width:400px;">
+      <h2>Оберіть сезон</h2>
+      <div class="season-grid" style="margin-top:14px;">
+        ${SEASONS.map(s => `<button class="season-tile" data-season="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join('')}
+        <button class="season-tile" data-season="Всі">Весь каталог</button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn ghost" id="season-cancel">Закрити</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(bg);
+  document.getElementById('season-cancel').onclick = () => bg.remove();
+  bg.onclick = e => { if(e.target === bg) bg.remove(); };
+  bg.querySelectorAll('[data-season]').forEach(el => el.onclick = () => { filterSeason = el.dataset.season; bg.remove(); render(); });
+}
+
+/* ---------- MAIN VIEW ---------- */
+function getFilteredProducts(){
+  return products.filter(p => {
+    if(!showSold && p.status === 'sold') return false;
+    if(filterCat !== 'Всі' && p.category !== filterCat) return false;
+    if(filterSeason && filterSeason !== 'Всі' && p.season !== filterSeason) return false;
+    if(searchQ){
+      const hay = (p.title+' '+p.description).toLowerCase();
+      if(!hay.includes(searchQ.toLowerCase())) return false;
+    }
+    return true;
+  });
 }
 
 function adminHeaderControls(){
@@ -243,7 +346,7 @@ function cardHtml(p){
         <span class="card-price mono">${escapeHtml(p.price || '—')}</span>
         ${p.sizes ? `<span class="card-size">р. ${escapeHtml(p.sizes)}</span>` : ''}
       </div>
-      ${p.category ? `<div class="card-cat">${escapeHtml(p.category)}</div>` : ''}
+      ${(p.category || p.season) ? `<div class="card-cat">${[p.category, p.season].filter(Boolean).map(escapeHtml).join(' · ')}</div>` : ''}
       ${isAdmin ? `
         <div class="card-admin-row">
           <button class="btn small" data-edit="${p.id}">Змінити</button>
@@ -521,7 +624,7 @@ function renderPhotoArea(){
 /* ---------- PRODUCT MODAL ---------- */
 function openProductModal(id){
   const existing = id ? products.find(x => x.id === id) : null;
-  const p = existing || { title:'', description:'', price:'', sizes:'', category:'Жіноче', status:'available', photos:[] };
+  const p = existing || { title:'', description:'', price:'', sizes:'', category:'Жіноче', season:'Демісезон', status:'available', photos:[] };
   pendingPhotos = (p.photos || []).slice();
 
   const bg = document.createElement('div');
@@ -559,6 +662,14 @@ function openProductModal(id){
           </select>
         </div>
         <div class="field">
+          <label for="p-season">Сезон</label>
+          <select id="p-season">
+            ${SEASONS.map(s => `<option ${s===p.season?'selected':''}>${s}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field">
           <label for="p-status">Статус</label>
           <select id="p-status">
             <option value="available" ${p.status==='available'?'selected':''}>В наявності</option>
@@ -590,6 +701,7 @@ function openProductModal(id){
       price: document.getElementById('p-price').value.trim(),
       sizes: document.getElementById('p-sizes').value.trim(),
       category: document.getElementById('p-cat').value,
+      season: document.getElementById('p-season').value,
       status: document.getElementById('p-status').value,
       photos: pendingPhotos.slice(),
       createdAt: existing ? existing.createdAt : Date.now()
