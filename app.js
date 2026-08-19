@@ -206,7 +206,6 @@ function render(){
   }
 
   const categories = ['Всі','Жіноче','Чоловіче','Дитяче','Унісекс'];
-  const filtered = getFilteredProducts();
 
   app.innerHTML = `
     <header class="shop-head">
@@ -221,24 +220,75 @@ function render(){
     </header>
 
     <div class="controls">
-      <input type="text" class="search-input" id="search" placeholder="Пошук за назвою або описом" value="${escapeHtml(searchQ)}">
+      <div style="position:relative;flex:1;min-width:180px;">
+        <input type="text" class="search-input" id="search" autocomplete="off" placeholder="Пошук за назвою або описом" value="${escapeHtml(searchQ)}">
+        <div id="search-suggest" class="search-suggest"></div>
+      </div>
       <button class="chip" id="change-season">Сезон: ${escapeHtml(filterSeason)} · Змінити</button>
       ${categories.map(c => `<button class="chip${c===filterCat?' active':''}" data-cat="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}
       <label class="toggle-sold"><input type="checkbox" id="show-sold" ${showSold?'checked':''}> Показувати продане</label>
     </div>
 
-    ${filtered.length === 0 ? `
+    <div id="catalog-body"></div>
+  `;
+
+  renderCatalogBody();
+
+  const searchInput = document.getElementById('search');
+  searchInput.oninput = e => {
+    searchQ = e.target.value;
+    renderCatalogBody();
+    updateSearchSuggestions(searchQ);
+  };
+  searchInput.onfocus = () => updateSearchSuggestions(searchQ);
+  searchInput.onblur = () => setTimeout(() => { const s = document.getElementById('search-suggest'); if(s) s.innerHTML = ''; }, 150);
+
+  document.getElementById('change-season').onclick = () => { filterSeason = isAdmin ? filterSeason : null; if(isAdmin){ openSeasonSwitchModal(); } else { render(); } };
+  document.querySelectorAll('.chip[data-cat]').forEach(el => el.onclick = () => { filterCat = el.dataset.cat; render(); });
+  document.getElementById('show-sold').onchange = e => { showSold = e.target.checked; render(); };
+  bindSocialLinks();
+  bindAdminHeaderControls();
+  renderDock();
+}
+
+function updateSearchSuggestions(query){
+  const box = document.getElementById('search-suggest');
+  if(!box) return;
+  const q = query.trim().toLowerCase();
+  if(!q){ box.innerHTML = ''; return; }
+  const matches = products.filter(p => (p.title+' '+p.description).toLowerCase().includes(q)).slice(0, 6);
+  if(!matches.length){ box.innerHTML = `<div class="suggest-empty">Нічого не знайдено</div>`; return; }
+  box.innerHTML = matches.map(p => `
+    <button type="button" class="suggest-item" data-suggest="${p.id}">
+      <span class="suggest-title">${escapeHtml(p.title)}</span>
+      <span class="suggest-price mono">${escapeHtml(p.price||'')}</span>
+    </button>
+  `).join('');
+  box.querySelectorAll('[data-suggest]').forEach(el => {
+    el.onmousedown = e => {
+      e.preventDefault();
+      const p = products.find(x => x.id === el.dataset.suggest);
+      if(!p) return;
+      searchQ = p.title;
+      const input = document.getElementById('search');
+      if(input) input.value = p.title;
+      box.innerHTML = '';
+      renderCatalogBody();
+    };
+  });
+}
+
+function renderCatalogBody(){
+  const body = document.getElementById('catalog-body');
+  if(!body) return;
+  const filtered = getFilteredProducts();
+  body.innerHTML = filtered.length === 0 ? `
       <div class="empty-state">
         <h3>${products.length === 0 ? 'Поки що тут порожньо' : 'Нічого не знайдено'}</h3>
         <p>${products.length === 0 ? (isAdmin ? 'Додайте першу пару взуття кнопкою нижче.' : "Скоро тут з'явиться взуття.") : 'Спробуйте змінити пошук або фільтр.'}</p>
       </div>
-    ` : `<div class="grid">${filtered.map(cardHtml).join('')}</div>`}
-  `;
+    ` : `<div class="grid">${filtered.map(cardHtml).join('')}</div>`;
 
-  document.getElementById('search').oninput = e => { searchQ = e.target.value; render(); };
-  document.getElementById('change-season').onclick = () => { filterSeason = isAdmin ? filterSeason : null; if(isAdmin){ openSeasonSwitchModal(); } else { render(); } };
-  document.querySelectorAll('.chip[data-cat]').forEach(el => el.onclick = () => { filterCat = el.dataset.cat; render(); });
-  document.getElementById('show-sold').onchange = e => { showSold = e.target.checked; render(); };
   document.querySelectorAll('[data-nav]').forEach(el => el.onclick = () => cycleCardPhoto(el.dataset.nav, parseInt(el.dataset.dir,10)));
   document.querySelectorAll('[data-zoom]').forEach(el => el.onclick = () => openLightbox(el.dataset.zoom));
   document.querySelectorAll('[data-readmore]').forEach(el => el.onclick = () => openReadMoreModal(el.dataset.readmore));
@@ -246,9 +296,6 @@ function render(){
     document.querySelectorAll('[data-edit]').forEach(el => el.onclick = () => openProductModal(el.dataset.edit));
     document.querySelectorAll('[data-delete]').forEach(el => el.onclick = () => confirmDelete(el.dataset.delete));
   }
-  bindSocialLinks();
-  bindAdminHeaderControls();
-  renderDock();
 }
 
 function renderSeasonGate(){
@@ -260,11 +307,7 @@ function renderSeasonGate(){
     <div style="max-width:640px;margin:70px auto 0;text-align:center;">
       <h1 class="shop-name">${escapeHtml(settings.name)}</h1>
       ${settings.tagline ? `<p class="shop-tagline" style="margin-bottom:30px;">${escapeHtml(settings.tagline)}</p>` : ''}
-      <div style="display:flex;gap:8px;max-width:420px;margin:30px auto 0;">
-        <input type="text" class="search-input" id="gate-search" placeholder="Або одразу пошук: назва чи опис…">
-        <button class="btn primary" id="gate-search-btn">Шукати</button>
-      </div>
-      <p style="color:var(--muted);font-size:14px;margin:26px 0 14px;">Або оберіть сезон</p>
+      <p style="color:var(--muted);font-size:14px;margin:30px 0 14px;">Оберіть сезон, щоб побачити відповідне взуття</p>
       <div class="season-grid">
         ${SEASONS.map(s => `<button class="season-tile" data-season="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join('')}
         <button class="season-tile" data-season="Всі">Весь каталог</button>
@@ -272,16 +315,6 @@ function renderSeasonGate(){
     </div>
   `;
   document.querySelectorAll('[data-season]').forEach(el => el.onclick = () => { filterSeason = el.dataset.season; render(); });
-  const gateSearch = document.getElementById('gate-search');
-  const runGateSearch = () => {
-    const q = gateSearch.value.trim();
-    if(!q) return;
-    searchQ = q;
-    filterSeason = 'Всі';
-    render();
-  };
-  document.getElementById('gate-search-btn').onclick = runGateSearch;
-  gateSearch.onkeydown = e => { if(e.key === 'Enter') runGateSearch(); };
   bindSocialLinks();
   bindAdminHeaderControls();
 }
