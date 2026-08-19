@@ -270,10 +270,10 @@ function updateSearchSuggestions(query){
       const p = products.find(x => x.id === el.dataset.suggest);
       if(!p) return;
       searchQ = p.title;
-      const input = document.getElementById('search');
-      if(input) input.value = p.title;
+      filterCat = 'Всі';
+      showSold = true;
       box.innerHTML = '';
-      renderCatalogBody();
+      render();
     };
   });
 }
