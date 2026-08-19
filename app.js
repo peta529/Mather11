@@ -237,6 +237,11 @@ function render(){
   const searchInput = document.getElementById('search');
   searchInput.oninput = e => {
     searchQ = e.target.value;
+    if(searchQ.trim()){
+      filterSeason = 'Всі';
+      filterCat = 'Всі';
+      updateFilterChipsUI();
+    }
     renderCatalogBody();
     updateSearchSuggestions(searchQ);
   };
@@ -249,6 +254,14 @@ function render(){
   bindSocialLinks();
   bindAdminHeaderControls();
   renderDock();
+}
+
+function updateFilterChipsUI(){
+  const seasonBtn = document.getElementById('change-season');
+  if(seasonBtn) seasonBtn.textContent = `Сезон: ${filterSeason} · Змінити`;
+  document.querySelectorAll('.chip[data-cat]').forEach(el => {
+    el.classList.toggle('active', el.dataset.cat === filterCat);
+  });
 }
 
 function updateSearchSuggestions(query){
@@ -271,6 +284,7 @@ function updateSearchSuggestions(query){
       if(!p) return;
       searchQ = p.title;
       filterCat = 'Всі';
+      filterSeason = 'Всі';
       showSold = true;
       box.innerHTML = '';
       render();
