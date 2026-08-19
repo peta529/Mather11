@@ -133,6 +133,9 @@ textarea{resize:vertical;min-height:72px;}
   .lightbox-close{top:6px;right:6px;}
 }
 
+.btn.icon{padding:8px 10px;display:inline-flex;align-items:center;justify-content:center;}
+.card-desc{cursor:pointer;}
+.card-desc:hover{color:var(--ink);}
 .login-box{max-width:380px;margin:70px auto;background:var(--card);border:1px solid var(--line-strong);border-radius:8px;padding:28px 26px;}
 
 @media (max-width:480px){
