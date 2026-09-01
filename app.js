@@ -8,6 +8,7 @@ let searchQ = '';
 let cardPhotoIndex = {};
 let pendingPhotos = [];
 const SEASONS = ['Зима','Демісезон','Літо'];
+const PRODUCT_SEASONS = ['Зима','Демісезон','Літо','Всі сезони'];
 
 const app = document.getElementById('app');
 
@@ -15,13 +16,25 @@ const ICON_TG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><pa
 const ICON_VIBER = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 4h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-6l-4 4v-4H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>';
 const ICON_IG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="17" height="17" rx="5" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.6"/><circle cx="17.2" cy="6.8" r="1.1" fill="currentColor"/></svg>';
 const SOCIAL_META = {
-  telegram: { label:'Telegram', icon:ICON_TG, placeholder:'https://t.me/imya' },
-  viber: { label:'Viber', icon:ICON_VIBER, placeholder:'viber://chat?number=%2B380...' },
-  instagram: { label:'Instagram', icon:ICON_IG, placeholder:'https://instagram.com/imya' }
+  telegram: { label:'Telegram', icon:ICON_TG, placeholder:'https://t.me/imya', type:'url', hint: '' },
+  viber: { label:'Viber', icon:ICON_VIBER, placeholder:'+380XXXXXXXXX', type:'tel', hint: 'Введіть лише номер телефону (з +380…) — посилання складеться автоматично.' },
+  instagram: { label:'Instagram', icon:ICON_IG, placeholder:'https://instagram.com/imya', type:'url', hint: '' }
 };
 
 function escapeHtml(s){
   return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function viberHref(raw){
+  if(!raw) return null;
+  let digits = raw.replace(/[^\d+]/g,'');
+  if(!digits) return null;
+  if(!digits.startsWith('+')) digits = '+' + digits;
+  return 'viber://chat?number=' + encodeURIComponent(digits);
+}
+function socialHref(key, raw){
+  if(!raw) return null;
+  if(key === 'viber') return viberHref(raw);
+  return raw;
 }
 function renderSocialLinks(){
   if(!settings) return '';
@@ -35,7 +48,9 @@ function renderSocialLinks(){
   }
   return keys.filter(k => settings[k]).map(k => {
     const meta = SOCIAL_META[k];
-    return `<a class="btn small icon" href="${escapeHtml(settings[k])}" target="_blank" rel="noopener" title="${meta.label}">${meta.icon}</a>`;
+    const href = socialHref(k, settings[k]);
+    if(!href) return '';
+    return `<a class="btn small icon" href="${escapeHtml(href)}" target="_blank" rel="noopener" title="${meta.label}">${meta.icon}</a>`;
   }).join('');
 }
 function bindSocialLinks(){
@@ -49,9 +64,9 @@ function openSocialModal(key){
     <div class="modal" style="max-width:400px;">
       <h2>${meta.label}</h2>
       <div class="field">
-        <label for="soc-val">Посилання</label>
-        <input type="url" id="soc-val" value="${escapeHtml(settings[key]||'')}" placeholder="${meta.placeholder}">
-        <div class="hint">Залиште порожнім, щоб прибрати кнопку з сайту.</div>
+        <label for="soc-val">${meta.type === 'tel' ? 'Номер телефону' : 'Посилання'}</label>
+        <input type="${meta.type}" id="soc-val" value="${escapeHtml(settings[key]||'')}" placeholder="${meta.placeholder}">
+        <div class="hint">${meta.hint ? meta.hint + ' ' : ''}Залиште порожнім, щоб прибрати кнопку з сайту.</div>
       </div>
       <div class="err" id="soc-err"></div>
       <div class="modal-actions">
@@ -153,8 +168,8 @@ function renderSettingsSetup(){
         <input type="url" id="s-telegram" placeholder="https://t.me/imya">
       </div>
       <div class="field">
-        <label for="s-viber">Посилання на Viber (необов'язково)</label>
-        <input type="url" id="s-viber" placeholder="viber://chat?number=%2B380...">
+        <label for="s-viber">Номер Viber (необов'язково)</label>
+        <input type="tel" id="s-viber" placeholder="+380XXXXXXXXX">
       </div>
       <div class="field">
         <label for="s-instagram">Посилання на Instagram (необов'язково)</label>
@@ -359,7 +374,7 @@ function getFilteredProducts(){
   return products.filter(p => {
     if(!showSold && p.status === 'sold') return false;
     if(filterCat !== 'Всі' && p.category !== filterCat) return false;
-    if(filterSeason && filterSeason !== 'Всі' && p.season !== filterSeason) return false;
+    if(filterSeason && filterSeason !== 'Всі' && p.season !== filterSeason && p.season !== 'Всі сезони') return false;
     if(searchQ){
       const hay = (p.title+' '+p.description).toLowerCase();
       if(!hay.includes(searchQ.toLowerCase())) return false;
@@ -583,8 +598,9 @@ function openSettingsModal(){
         <input type="url" id="st-telegram" value="${escapeHtml(settings.telegram||'')}" placeholder="https://t.me/imya">
       </div>
       <div class="field">
-        <label for="st-viber">Посилання на Viber</label>
-        <input type="url" id="st-viber" value="${escapeHtml(settings.viber||'')}" placeholder="viber://chat?number=%2B380...">
+        <label for="st-viber">Номер Viber</label>
+        <input type="tel" id="st-viber" value="${escapeHtml(settings.viber||'')}" placeholder="+380XXXXXXXXX">
+        <div class="hint">Лише номер телефону — посилання складеться автоматично.</div>
       </div>
       <div class="field">
         <label for="st-instagram">Посилання на Instagram</label>
@@ -725,8 +741,9 @@ function openProductModal(id){
         <div class="field">
           <label for="p-season">Сезон</label>
           <select id="p-season">
-            ${SEASONS.map(s => `<option ${s===p.season?'selected':''}>${s}</option>`).join('')}
+            ${PRODUCT_SEASONS.map(s => `<option ${s===p.season?'selected':''}>${s}</option>`).join('')}
           </select>
+          <div class="hint">«Всі сезони» — товар буде видно в будь-якому сезоні.</div>
         </div>
       </div>
       <div class="row2">
