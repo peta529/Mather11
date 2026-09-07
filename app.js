@@ -8,7 +8,6 @@ let searchQ = '';
 let cardPhotoIndex = {};
 let pendingPhotos = [];
 const SEASONS = ['Зима','Демісезон','Літо'];
-const PRODUCT_SEASONS = ['Зима','Демісезон','Літо','Всі сезони'];
 
 const app = document.getElementById('app');
 
@@ -30,6 +29,12 @@ function viberHref(raw){
   if(!digits) return null;
   if(!digits.startsWith('+')) digits = '+' + digits;
   return 'viber://chat?number=' + encodeURIComponent(digits);
+}
+function getProductSeasons(p){
+  if(Array.isArray(p.seasons) && p.seasons.length) return p.seasons;
+  if(p.season === 'Всі сезони') return SEASONS.slice();
+  if(p.season) return [p.season];
+  return [];
 }
 function socialHref(key, raw){
   if(!raw) return null;
@@ -374,7 +379,10 @@ function getFilteredProducts(){
   return products.filter(p => {
     if(!showSold && p.status === 'sold') return false;
     if(filterCat !== 'Всі' && p.category !== filterCat) return false;
-    if(filterSeason && filterSeason !== 'Всі' && p.season !== filterSeason && p.season !== 'Всі сезони') return false;
+    if(filterSeason && filterSeason !== 'Всі'){
+      const ps = getProductSeasons(p);
+      if(ps.length && !ps.includes(filterSeason)) return false;
+    }
     if(searchQ){
       const hay = (p.title+' '+p.description).toLowerCase();
       if(!hay.includes(searchQ.toLowerCase())) return false;
@@ -422,7 +430,7 @@ function cardHtml(p){
         <span class="card-price mono">${escapeHtml(p.price || '—')}</span>
         ${p.sizes ? `<span class="card-size">р. ${escapeHtml(p.sizes)}</span>` : ''}
       </div>
-      ${(p.category || p.season) ? `<div class="card-cat">${[p.category, p.season].filter(Boolean).map(escapeHtml).join(' · ')}</div>` : ''}
+      ${(p.category || getProductSeasons(p).length) ? `<div class="card-cat">${[p.category, getProductSeasons(p).join(', ')].filter(Boolean).map(escapeHtml).join(' · ')}</div>` : ''}
       ${isAdmin ? `
         <div class="card-admin-row">
           <button class="btn small" data-edit="${p.id}">Змінити</button>
@@ -701,7 +709,8 @@ function renderPhotoArea(){
 /* ---------- PRODUCT MODAL ---------- */
 function openProductModal(id){
   const existing = id ? products.find(x => x.id === id) : null;
-  const p = existing || { title:'', description:'', price:'', sizes:'', category:'Жіноче', season:'Демісезон', status:'available', photos:[] };
+  const p = existing || { title:'', description:'', price:'', sizes:'', category:'Жіноче', seasons:['Демісезон'], status:'available', photos:[] };
+  const currentSeasons = getProductSeasons(p);
   pendingPhotos = (p.photos || []).slice();
 
   const bg = document.createElement('div');
@@ -739,11 +748,15 @@ function openProductModal(id){
           </select>
         </div>
         <div class="field">
-          <label for="p-season">Сезон</label>
-          <select id="p-season">
-            ${PRODUCT_SEASONS.map(s => `<option ${s===p.season?'selected':''}>${s}</option>`).join('')}
-          </select>
-          <div class="hint">«Всі сезони» — товар буде видно в будь-якому сезоні.</div>
+          <label>Сезон (можна декілька)</label>
+          <div class="season-checks">
+            ${SEASONS.map(s => `
+              <label class="check-pill">
+                <input type="checkbox" name="p-season" value="${escapeHtml(s)}" ${currentSeasons.includes(s) ? 'checked' : ''}>
+                ${escapeHtml(s)}
+              </label>
+            `).join('')}
+          </div>
         </div>
       </div>
       <div class="row2">
@@ -779,7 +792,7 @@ function openProductModal(id){
       price: document.getElementById('p-price').value.trim(),
       sizes: document.getElementById('p-sizes').value.trim(),
       category: document.getElementById('p-cat').value,
-      season: document.getElementById('p-season').value,
+      seasons: Array.from(document.querySelectorAll('input[name="p-season"]:checked')).map(el => el.value),
       status: document.getElementById('p-status').value,
       photos: pendingPhotos.slice(),
       createdAt: existing ? existing.createdAt : Date.now()
